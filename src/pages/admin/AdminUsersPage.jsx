@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "../../api/client";
-import {
-  Card, Button, Modal, Input, StatusBadge,
-  EmptyState, ErrorMsg, Table
-} from "../../components/ui";
+import { Card, Button, EmptyState, StatusBadge, Table } from "../../components/ui";
 import toast from "react-hot-toast";
 
 function fmt(n) {
@@ -13,214 +10,156 @@ function fmt(n) {
     : "₦0.00";
 }
 
-const EMPTY_AD = {
-  title: "", advertiser: "", targetUrl: "",
-  imageUrl: "", payoutPerView: "", maxViews: "", description: "",
-};
-
-export default function AdminAdsPage() {
+export default function AdminUsersPage() {
   const qc = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState(null);
-  const [createModal, setCreateModal] = useState(false);
-  const [editModal, setEditModal] = useState(null);
-  const [form, setForm] = useState(EMPTY_AD);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState(null);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [toggling, setToggling] = useState(null);
+  const [page, setPage] = useState(0);
+  const LIMIT = 50;
+
+  // Simple debounce on search
+  function handleSearch(e) {
+    const val = e.target.value;
+    setSearch(val);
+    clearTimeout(window.__userSearchTimer);
+    window.__userSearchTimer = setTimeout(() => {
+      setDebouncedSearch(val);
+      setPage(0);
+    }, 350);
+  }
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin-ads", statusFilter],
-    queryFn: () => adminApi.getAds({
-      limit: 50,
-      status: statusFilter === "all" ? undefined : statusFilter || undefined,
-    }).then((r) => r.data),
+    queryKey: ["admin-users", { debouncedSearch, page }],
+    queryFn: () =>
+      adminApi.getUsers({
+        limit: LIMIT,
+        offset: page * LIMIT,
+        search: debouncedSearch || undefined,
+      }).then((r) => r.data),
     staleTime: 20_000,
   });
 
-  function invalidate() {
-    qc.invalidateQueries({ queryKey: ["admin-ads"] });
-    qc.invalidateQueries({ queryKey: ["admin-stats"] });
-  }
-
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  async function handleCreate() {
-    setFormError(null);
-    if (!form.title || !form.advertiser || !form.targetUrl || !form.payoutPerView) {
-      setFormError({ message: "Title, advertiser, target URL, and payout are required" });
-      return;
-    }
-    setSubmitting(true);
+  async function handleToggleBlock(user) {
+    setToggling(user.id);
     try {
-      await adminApi.createAd({ ...form, payoutPerView: parseFloat(form.payoutPerView), maxViews: form.maxViews ? parseInt(form.maxViews) : undefined });
-      toast.success("Ad created (starts paused)");
-      invalidate();
-      setCreateModal(false);
-      setForm(EMPTY_AD);
-    } catch (err) {
-      setFormError(err);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleUpdate() {
-    setFormError(null);
-    setSubmitting(true);
-    try {
-      await adminApi.updateAd(editModal.id, {
-        ...form,
-        payoutPerView: parseFloat(form.payoutPerView),
-        maxViews: form.maxViews ? parseInt(form.maxViews) : undefined,
-      });
-      toast.success("Ad updated");
-      invalidate();
-      setEditModal(null);
-    } catch (err) {
-      setFormError(err);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleToggle(ad) {
-    setToggling(ad.id);
-    try {
-      if (ad.status === "active") {
-        await adminApi.pauseAd(ad.id);
-        toast.success("Ad paused");
+      if (user.isBlocked) {
+        await adminApi.unblockUser(user.id);
+        toast.success(`${user.email} unblocked`);
       } else {
-        await adminApi.activateAd(ad.id);
-        toast.success("Ad activated");
+        await adminApi.blockUser(user.id);
+        toast.success(`${user.email} blocked`);
       }
-      invalidate();
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      qc.invalidateQueries({ queryKey: ["admin-stats"] });
     } catch (err) {
-      toast.error(err?.response?.data?.error || "Could not update ad status");
+      toast.error(err?.response?.data?.error || "Could not update user");
     } finally {
       setToggling(null);
     }
   }
 
-  function openEdit(ad) {
-    setEditModal(ad);
-    setForm({
-      title: ad.title || "",
-      advertiser: ad.advertiser || "",
-      targetUrl: ad.targetUrl || "",
-      imageUrl: ad.imageUrl || "",
-      payoutPerView: ad.payoutPerView?.toString() || "",
-      maxViews: ad.maxViews?.toString() || "",
-      description: ad.description || "",
-    });
-    setFormError(null);
-  }
-
-  const ads = data?.ads || [];
+  const users = data?.users || [];
 
   const columns = [
     {
-      key: "title", label: "Ad", render: (v, row) => (
+      key: "email", label: "User", render: (v, row) => (
         <div>
-          <div style={{ fontWeight: 500, fontSize: "13px" }}>{v}</div>
-          <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{row.advertiser}</div>
+          <div style={{ fontSize: "13px", fontWeight: 500 }}>{v}</div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{row.phone}</div>
         </div>
-      )
+      ),
     },
-    { key: "payoutPerView", label: "Payout/view", render: (v) => <span style={{ color: "var(--gold)", fontWeight: 600 }}>{fmt(v)}</span> },
-    { key: "totalViews", label: "Views", render: (v, row) => `${v ?? 0}${row.maxViews ? ` / ${row.maxViews}` : ""}` },
-    { key: "status", label: "Status", render: (v) => <StatusBadge status={v} /> },
-    { key: "createdAt", label: "Created", render: (v) => v ? new Date(v).toLocaleDateString() : "—" },
+    {
+      key: "role", label: "Role", render: (v) => (
+        <span style={{
+          fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em",
+          color: v === "admin" ? "var(--gold)" : "var(--text-secondary)",
+        }}>
+          {v}
+        </span>
+      ),
+    },
+    {
+      key: "balance", label: "Balance",
+      render: (v) => <span style={{ color: "var(--gold)", fontWeight: 600 }}>{fmt(v)}</span>,
+    },
+    {
+      key: "isBlocked", label: "Status",
+      render: (v) => <StatusBadge status={v ? "blocked" : "active"} />,
+    },
+    { key: "location", label: "Location", render: (v) => v || "—" },
+    { key: "createdAt", label: "Joined", render: (v) => v ? new Date(v).toLocaleDateString() : "—" },
     {
       key: "id", label: "Actions", render: (id, row) => (
-        <div style={{ display: "flex", gap: "6px" }}>
-          <Button size="sm" variant="secondary" onClick={() => openEdit(row)}>Edit</Button>
-          <Button
-            size="sm"
-            variant={row.status === "active" ? "danger" : "success"}
-            loading={toggling === id}
-            onClick={() => handleToggle(row)}
-          >
-            {row.status === "active" ? "Pause" : "Activate"}
-          </Button>
-        </div>
-      )
+        <Button
+          size="sm"
+          variant={row.isBlocked ? "success" : "danger"}
+          loading={toggling === id}
+          onClick={() => handleToggleBlock(row)}
+        >
+          {row.isBlocked ? "Unblock" : "Block"}
+        </Button>
+      ),
     },
   ];
 
-  const AdForm = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-      <ErrorMsg error={formError} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        <Input label="Title *" placeholder="Download App X" value={form.title} onChange={set("title")} />
-        <Input label="Advertiser *" placeholder="Company Name" value={form.advertiser} onChange={set("advertiser")} />
-      </div>
-      <Input label="Target URL *" type="url" placeholder="https://example.com" value={form.targetUrl} onChange={set("targetUrl")} />
-      <Input label="Image URL" type="url" placeholder="https://..." value={form.imageUrl} onChange={set("imageUrl")} hint="Optional banner image" />
-      <Input label="Description" placeholder="Short description of the task" value={form.description} onChange={set("description")} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        <Input label="Payout per view (₦) *" type="number" min="0.01" step="0.01" placeholder="10.00" value={form.payoutPerView} onChange={set("payoutPerView")} />
-        <Input label="Max views" type="number" min="1" placeholder="Unlimited" value={form.maxViews} onChange={set("maxViews")} hint="Leave blank for unlimited" />
-      </div>
-    </div>
-  );
-
   return (
     <div className="page-enter" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
-        <div>
-          <h1 style={{ fontSize: "26px", letterSpacing: "-0.02em" }}>Manage Ads</h1>
-          <p style={{ color: "var(--text-secondary)", fontSize: "14px", marginTop: "4px" }}>
-            Create, edit, activate and pause advertising campaigns
-          </p>
-        </div>
-        <Button onClick={() => { setCreateModal(true); setForm(EMPTY_AD); setFormError(null); }}>
-          + Create ad
-        </Button>
+      <div>
+        <h1 style={{ fontSize: "26px", letterSpacing: "-0.02em" }}>Manage Users</h1>
+        <p style={{ color: "var(--text-secondary)", fontSize: "14px", marginTop: "4px" }}>
+          View all users and block or unblock their accounts
+        </p>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-        {[{ label: "All", value: "all" }, { label: "Active", value: "active" }, { label: "Paused", value: "paused" }, { label: "Expired", value: "expired" }].map(({ label, value }) => (
-          <button key={value} onClick={() => setStatusFilter(value === "all" ? null : value)}
-            style={{
-              padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 500,
-              border: `1px solid ${statusFilter === (value === "all" ? null : value) ? "var(--gold)" : "var(--border)"}`,
-              background: statusFilter === (value === "all" ? null : value) ? "var(--gold-muted)" : "transparent",
-              color: statusFilter === (value === "all" ? null : value) ? "var(--gold)" : "var(--text-secondary)",
-              cursor: "pointer", transition: "all var(--transition)",
-            }}>
-            {label}
-          </button>
-        ))}
+      {/* Search */}
+      <div style={{ maxWidth: 340 }}>
+        <input
+          type="text"
+          placeholder="Search by email or phone..."
+          value={search}
+          onChange={handleSearch}
+          style={{
+            width: "100%", padding: "9px 14px", fontSize: "13px",
+            background: "var(--bg-elevated)", border: "1px solid var(--border)",
+            borderRadius: "var(--radius)", color: "var(--text)", outline: "none",
+            boxSizing: "border-box",
+          }}
+        />
       </div>
 
       <Card style={{ padding: 0, overflow: "hidden" }}>
-        <Table columns={columns} data={ads} loading={isLoading}
-          emptyState={<EmptyState icon="◈" title="No ads yet" description='Click "Create ad" to add the first campaign.' />}
+        <Table
+          columns={columns}
+          data={users}
+          loading={isLoading}
+          emptyState={
+            <EmptyState
+              icon="◯"
+              title="No users found"
+              description={debouncedSearch ? "No users match your search." : "No users have registered yet."}
+            />
+          }
         />
       </Card>
 
-      {/* Create modal */}
-      <Modal open={createModal} onClose={() => setCreateModal(false)} title="Create new ad" width={560}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <AdForm />
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", paddingTop: "4px" }}>
-            <Button variant="secondary" onClick={() => setCreateModal(false)}>Cancel</Button>
-            <Button loading={submitting} onClick={handleCreate}>Create ad</Button>
-          </div>
+      {(users.length === LIMIT || page > 0) && (
+        <div style={{ display: "flex", justifyContent: "center", gap: "10px" }}>
+          {page > 0 && (
+            <button onClick={() => setPage((p) => p - 1)}
+              style={{ padding: "8px 16px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "none", color: "var(--text)", cursor: "pointer" }}>
+              ← Prev
+            </button>
+          )}
+          {users.length === LIMIT && (
+            <button onClick={() => setPage((p) => p + 1)}
+              style={{ padding: "8px 16px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "none", color: "var(--text)", cursor: "pointer" }}>
+              Next →
+            </button>
+          )}
         </div>
-      </Modal>
-
-      {/* Edit modal */}
-      <Modal open={Boolean(editModal)} onClose={() => setEditModal(null)} title={`Edit — ${editModal?.title}`} width={560}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <AdForm />
-          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", paddingTop: "4px" }}>
-            <Button variant="secondary" onClick={() => setEditModal(null)}>Cancel</Button>
-            <Button loading={submitting} onClick={handleUpdate}>Save changes</Button>
-          </div>
-        </div>
-      </Modal>
+      )}
     </div>
   );
 }
