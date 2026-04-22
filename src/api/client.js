@@ -91,6 +91,7 @@ export const adminApi = {
   blockUser: (id) => api.post(`/api/admin/users/${id}/block`),
   unblockUser: (id) => api.post(`/api/admin/users/${id}/unblock`),
   auditUser: (id) => api.get(`/api/admin/users/${id}/audit`),
+  getUsers: (params) => api.get("/api/admin/users", { params }),
 
   // Logs
   getLogs: (params) => api.get("/api/admin/logs", { params }),
