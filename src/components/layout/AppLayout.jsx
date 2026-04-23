@@ -27,18 +27,18 @@ export default function AppLayout({ children }) {
   const { isAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < MOBILE_BP);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia(`(max-width: ${MOBILE_BP - 1}px)`).matches);
   const navItems = isAdmin ? adminNav : userNav;
 
   useEffect(() => {
-    const onResize = () => {
-      const mobile = window.innerWidth < MOBILE_BP;
-      setIsMobile(mobile);
-      if (!mobile) setMobileOpen(false);
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+  const mql = window.matchMedia(`(max-width: ${MOBILE_BP - 1}px)`);
+  const handler = (e) => {
+    setIsMobile(e.matches);
+    if (!e.matches) setMobileOpen(false);
+  };
+  mql.addEventListener("change", handler);
+  return () => mql.removeEventListener("change", handler);
+}, []);
 
   async function handleLogout() {
     await logout();
