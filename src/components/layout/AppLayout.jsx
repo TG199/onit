@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const userNav = [
   { to: "/dashboard", icon: "⬡", label: "Dashboard" },
@@ -20,11 +20,25 @@ const adminNav = [
   { to: "/admin/logs", icon: "≡", label: "Audit Logs" },
 ];
 
+const SIDEBAR_W = 220;
+const MOBILE_BP = 768;
+
 export default function AppLayout({ children }) {
   const { isAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < MOBILE_BP);
   const navItems = isAdmin ? adminNav : userNav;
+
+  useEffect(() => {
+    const onResize = () => {
+      const mobile = window.innerWidth < MOBILE_BP;
+      setIsMobile(mobile);
+      if (!mobile) setMobileOpen(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   async function handleLogout() {
     await logout();
@@ -32,23 +46,43 @@ export default function AppLayout({ children }) {
     navigate("/login");
   }
 
-  const sidebarWidth = 220;
+  function closeMenu() {
+    if (isMobile) setMobileOpen(false);
+  }
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
+
+      {/* Mobile overlay */}
+      {isMobile && mobileOpen && (
+        <div
+          onClick={closeMenu}
+          style={{
+            position: "fixed", inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            zIndex: 99,
+          }}
+        />
+      )}
+
       {/* Sidebar */}
       <aside style={{
-        width: sidebarWidth, flexShrink: 0, position: "fixed",
-        top: 0, left: mobileOpen ? 0 : undefined, bottom: 0,
-        background: "var(--bg-card)", borderRight: "1px solid var(--border)",
-        display: "flex", flexDirection: "column",
-        zIndex: 100, transition: "transform var(--transition)",
+        width: SIDEBAR_W,
+        flexShrink: 0,
+        position: "fixed",
+        top: 0, bottom: 0,
+        background: "var(--bg-card)",
+        borderRight: "1px solid var(--border)",
+        display: "flex",
+        flexDirection: "column",
+        zIndex: 100,
+        transition: "transform 0.25s ease",
+        transform: isMobile && !mobileOpen
+          ? `translateX(-${SIDEBAR_W}px)`
+          : "translateX(0)",
       }}>
         {/* Logo */}
-        <div style={{
-          padding: "24px 20px 20px",
-          borderBottom: "1px solid var(--border)",
-        }}>
+        <div style={{ padding: "24px 20px 20px", borderBottom: "1px solid var(--border)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div style={{
               width: 36, height: 36, borderRadius: "50%",
@@ -77,6 +111,7 @@ export default function AppLayout({ children }) {
               key={to}
               to={to}
               end={to === "/admin"}
+              onClick={closeMenu}
               style={({ isActive }) => ({
                 display: "flex", alignItems: "center", gap: "10px",
                 padding: "9px 12px", borderRadius: "var(--radius)",
@@ -85,18 +120,6 @@ export default function AppLayout({ children }) {
                 background: isActive ? "var(--gold-muted)" : "transparent",
                 transition: "all var(--transition)", textDecoration: "none",
               })}
-              onMouseEnter={(e) => {
-                if (!e.currentTarget.classList.contains("active")) {
-                  e.currentTarget.style.color = "var(--text)";
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!e.currentTarget.dataset.active) {
-                  e.currentTarget.style.color = "";
-                  e.currentTarget.style.background = "";
-                }
-              }}
             >
               <span style={{ fontSize: "16px", width: 20, textAlign: "center" }}>{icon}</span>
               {label}
@@ -104,7 +127,7 @@ export default function AppLayout({ children }) {
           ))}
         </nav>
 
-        {/* Bottom */}
+        {/* Sign out */}
         <div style={{ padding: "12px 10px", borderTop: "1px solid var(--border)" }}>
           <button
             onClick={handleLogout}
@@ -113,7 +136,7 @@ export default function AppLayout({ children }) {
               padding: "9px 12px", borderRadius: "var(--radius)",
               width: "100%", fontSize: "13px", fontWeight: 500,
               color: "var(--text-secondary)", background: "none",
-              transition: "all var(--transition)", textAlign: "left",
+              transition: "all var(--transition)", textAlign: "left", cursor: "pointer",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; e.currentTarget.style.background = "var(--danger-bg)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = ""; e.currentTarget.style.background = ""; }}
@@ -125,8 +148,60 @@ export default function AppLayout({ children }) {
       </aside>
 
       {/* Main content */}
-      <main style={{ flex: 1, marginLeft: sidebarWidth, minHeight: "100vh" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 32px" }}>
+      <main style={{
+        flex: 1,
+        marginLeft: isMobile ? 0 : SIDEBAR_W,
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+      }}>
+        {/* Mobile top bar */}
+        {isMobile && (
+          <div style={{
+            position: "sticky", top: 0, zIndex: 50,
+            background: "var(--bg-card)",
+            borderBottom: "1px solid var(--border)",
+            padding: "0 16px",
+            height: 52,
+            display: "flex", alignItems: "center", gap: "12px",
+            flexShrink: 0,
+          }}>
+            <button
+              onClick={() => setMobileOpen(true)}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                color: "var(--text)", padding: "6px", borderRadius: "var(--radius)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "18px", lineHeight: 1,
+              }}
+            >
+              ☰
+            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: "50%",
+                background: "var(--gold)", display: "flex",
+                alignItems: "center", justifyContent: "center",
+                fontFamily: "var(--font-display)", fontWeight: 800,
+                fontSize: "13px", color: "#000",
+              }}>O</div>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "16px" }}>ONIT</span>
+              {isAdmin && (
+                <span style={{ fontSize: "9px", color: "var(--gold)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                  Admin
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div style={{
+          maxWidth: 1100,
+          margin: "0 auto",
+          padding: isMobile ? "20px 16px" : "32px 32px",
+          width: "100%",
+          boxSizing: "border-box",
+        }}>
           {children}
         </div>
       </main>
