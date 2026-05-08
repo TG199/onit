@@ -18,6 +18,25 @@ const EMPTY_AD = {
   imageUrl: "", payoutPerView: "", maxViews: "", description: "",
 };
 
+
+function AdForm({ form, formError, set }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+      <ErrorMsg error={formError} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <Input label="Title *" placeholder="Download App X" value={form.title} onChange={set("title")} />
+        <Input label="Advertiser *" placeholder="Company Name" value={form.advertiser} onChange={set("advertiser")} />
+      </div>
+      <Input label="Target URL *" type="url" placeholder="https://example.com" value={form.targetUrl} onChange={set("targetUrl")} />
+      <Input label="Image URL" type="url" placeholder="https://..." value={form.imageUrl} onChange={set("imageUrl")} hint="Optional banner image" />
+      <Input label="Description" placeholder="Short description of the task" value={form.description} onChange={set("description")} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <Input label="Payout per view (₦) *" type="number" min="0.01" step="0.01" placeholder="10.00" value={form.payoutPerView} onChange={set("payoutPerView")} />
+        <Input label="Max views" type="number" min="1" placeholder="Unlimited" value={form.maxViews} onChange={set("maxViews")} hint="Leave blank for unlimited" />
+      </div>
+    </div>
+  );
+}
 export default function AdminAdsPage() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState(null);
@@ -147,22 +166,22 @@ export default function AdminAdsPage() {
     },
   ];
 
-  const AdForm = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-      <ErrorMsg error={formError} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        <Input label="Title *" placeholder="Download App X" value={form.title} onChange={set("title")} />
-        <Input label="Advertiser *" placeholder="Company Name" value={form.advertiser} onChange={set("advertiser")} />
-      </div>
-      <Input label="Target URL *" type="url" placeholder="https://example.com" value={form.targetUrl} onChange={set("targetUrl")} />
-      <Input label="Image URL" type="url" placeholder="https://..." value={form.imageUrl} onChange={set("imageUrl")} hint="Optional banner image" />
-      <Input label="Description" placeholder="Short description of the task" value={form.description} onChange={set("description")} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        <Input label="Payout per view (₦) *" type="number" min="0.01" step="0.01" placeholder="10.00" value={form.payoutPerView} onChange={set("payoutPerView")} />
-        <Input label="Max views" type="number" min="1" placeholder="Unlimited" value={form.maxViews} onChange={set("maxViews")} hint="Leave blank for unlimited" />
-      </div>
-    </div>
-  );
+  // const AdForm = () => (
+  //   <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+  //     <ErrorMsg error={formError} />
+  //     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+  //       <Input label="Title *" placeholder="Download App X" value={form.title} onChange={set("title")} />
+  //       <Input label="Advertiser *" placeholder="Company Name" value={form.advertiser} onChange={set("advertiser")} />
+  //     </div>
+  //     <Input label="Target URL *" type="url" placeholder="https://example.com" value={form.targetUrl} onChange={set("targetUrl")} />
+  //     <Input label="Image URL" type="url" placeholder="https://..." value={form.imageUrl} onChange={set("imageUrl")} hint="Optional banner image" />
+  //     <Input label="Description" placeholder="Short description of the task" value={form.description} onChange={set("description")} />
+  //     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+  //       <Input label="Payout per view (₦) *" type="number" min="0.01" step="0.01" placeholder="10.00" value={form.payoutPerView} onChange={set("payoutPerView")} />
+  //       <Input label="Max views" type="number" min="1" placeholder="Unlimited" value={form.maxViews} onChange={set("maxViews")} hint="Leave blank for unlimited" />
+  //     </div>
+  //   </div>
+  // );
 
   return (
     <div className="page-enter" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -203,16 +222,36 @@ export default function AdminAdsPage() {
       {/* Create modal */}
       <Modal open={createModal} onClose={() => setCreateModal(false)} title="Create new ad" width={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <AdForm form={form} formError={formError} set={set} />
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", paddingTop: "4px" }}>
+              <Button variant="secondary" onClick={() => setCreateModal(false)}>Cancel</Button>
+                <Button loading={submitting} onClick={handleCreate}>Create ad</Button>
+            </div>
+        </div>
+      </Modal>
+      
+      {/* <Modal open={createModal} onClose={() => setCreateModal(false)} title="Create new ad" width={560}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <AdForm />
           <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", paddingTop: "4px" }}>
             <Button variant="secondary" onClick={() => setCreateModal(false)}>Cancel</Button>
             <Button loading={submitting} onClick={handleCreate}>Create ad</Button>
           </div>
         </div>
-      </Modal>
+      </Modal> */}
 
       {/* Edit modal */}
       <Modal open={Boolean(editModal)} onClose={() => setEditModal(null)} title={`Edit — ${editModal?.title}`} width={560}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <AdForm form={form} formError={formError} set={set} />
+          <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", paddingTop: "4px" }}>
+            <Button variant="secondary" onClick={() => setEditModal(null)}>Cancel</Button>
+            <Button loading={submitting} onClick={handleUpdate}>Save changes</Button>
+          </div>
+        </div>
+      </Modal>
+      
+      {/* <Modal open={Boolean(editModal)} onClose={() => setEditModal(null)} title={`Edit — ${editModal?.title}`} width={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <AdForm />
           <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", paddingTop: "4px" }}>
@@ -220,7 +259,7 @@ export default function AdminAdsPage() {
             <Button loading={submitting} onClick={handleUpdate}>Save changes</Button>
           </div>
         </div>
-      </Modal>
+      </Modal> */}
     </div>
   );
 }
