@@ -8,16 +8,73 @@ function fmt(n) {
   return typeof n === "number" ? `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2 })}` : "₦0.00";
 }
 
+async function downloadImage(url, filename) {
+  try {
+    const response = await fetch(url, { mode: "cors" });
+    if (!response.ok) throw new Error("Fetch failed");
+    const blob = await response.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(objectUrl);
+  } catch (err) {
+    // CORS or network issue — fall back to opening the image in a new tab
+    // so the user can save it manually.
+    window.open(url, "_blank", "noopener,noreferrer");
+    toast.error("Couldn't auto-download — opened the image in a new tab instead.");
+  }
+}
+
 function AdCard({ ad, onSubmit }) {
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownload(e) {
+    e.stopPropagation();
+    if (downloading) return;
+    setDownloading(true);
+    const safeName = (ad.title || "ad-image").replace(/[^a-z0-9-_]+/gi, "-").toLowerCase();
+    await downloadImage(ad.imageUrl, `${safeName}.jpg`);
+    setDownloading(false);
+  }
+
   return (
     <Card hover style={{ display: "flex", flexDirection: "column", gap: "14px", padding: "18px" }}>
       {/* Ad image */}
       {ad.imageUrl && (
         <div style={{
+          position: "relative",
           height: 140, borderRadius: "var(--radius)", overflow: "hidden",
           background: "var(--bg-elevated)",
         }}>
           <img src={ad.imageUrl} alt={ad.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <button
+            onClick={handleDownload}
+            disabled={downloading}
+            title="Download image"
+            aria-label="Download image"
+            style={{
+              position: "absolute", top: 8, right: 8,
+              width: 30, height: 30, borderRadius: "50%",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "rgba(0, 0, 0, 0.55)", border: "none", cursor: downloading ? "default" : "pointer",
+              color: "#fff", opacity: downloading ? 0.6 : 1,
+              backdropFilter: "blur(2px)",
+            }}
+          >
+            {downloading ? (
+              <span style={{ fontSize: "11px" }}>…</span>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3v12" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
+            )}
+          </button>
         </div>
       )}
       {!ad.imageUrl && (
